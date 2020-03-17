@@ -1,0 +1,8 @@
+[package]
+name = "herodotos"
+version = "0.1.0"
+authors = ["Vadim Rutkovsky <vrutkovs@redhat.com>"]
+edition = "2018"
+
+[dependencies]
+slack = "0.22.0"
