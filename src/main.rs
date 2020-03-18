@@ -47,6 +47,7 @@ impl slack::EventHandler for PMHandler {
       }
       _ => return,
     };
+    // TODO: react to original message?
   }
 
   fn on_close(&mut self, cli: &slack::RtmClient) {
