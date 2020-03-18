@@ -137,7 +137,20 @@ impl PMHandler {
 
   fn process_message(&mut self, msg: MsgData) -> Option<String> {
     match msg.text.as_str() {
-      "done" => Some(format!("{:?}", self.daily_statuses)),
+      "done" => {
+        match self.daily_statuses.get_mut(&msg.user) {
+          Some(status) => {
+            //TODO: get readable user name
+            let output = format!("Status for {}:\n{:?}", msg.user, status);
+            self
+              .daily_statuses
+              .entry(msg.user)
+              .and_modify(|e| *e = Vec::<String>::new());
+            Some(output)
+          }
+          None => None,
+        }
+      }
       _ => {
         // Store messages
         match self.daily_statuses.get_mut(&msg.user) {
