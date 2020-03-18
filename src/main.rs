@@ -21,10 +21,7 @@ impl slack::EventHandler for PMHandler {
     println!("{}: '{}'", msg_data.user, msg_data.text);
 
     match self.process_message(msg_data) {
-      Some(message) => {
-        let channel_id = "DND47PSF9";
-        let _ = cli.sender().send_message(&channel_id, message.as_str());
-      }
+      Some(message) => self.post_status(cli, message),
       None => return,
     }
   }
@@ -82,6 +79,11 @@ impl PMHandler {
         None
       }
     }
+  }
+
+  fn post_status(&mut self, cli: &slack::RtmClient, message: String) {
+    let channel_id = "DND47PSF9";
+    let _ = cli.sender().send_message(&channel_id, message.as_str());
   }
 }
 
