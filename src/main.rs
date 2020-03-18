@@ -8,26 +8,37 @@ struct PMHandler;
 impl slack::EventHandler for PMHandler {
   fn on_event(&mut self, cli: &RtmClient, event: Event) {
     println!("on_event(event: {:?})", event);
-    let m = match event {
+    let slack_message = match event {
       Event::Message(m) => Box::leak(m),
       _ => return,
     };
-    let text = match &m {
-      Message::Standard(m) => match &m.text {
-        Some(t) => t,
-        None => return,
-      },
+    let m = match &slack_message {
+      Message::Standard(m) => m,
       _ => return,
     };
-    println!("{}", text)
+    let text = match &m.text {
+      Some(t) => t,
+      None => return,
+    };
+    let user = match &m.user {
+      Some(u) => u,
+      None => return,
+    };
+    println!("{}: '{}'", user, text);
+    // TODO: store the message here
+    // TODO: if text == "done" then post the collected messages to the channel:
+    // let channel_id = "DND47PSF9";
+    // let _ = cli.sender().send_message(&channel_id, "Recorded, thanks!");
   }
 
   fn on_close(&mut self, cli: &RtmClient) {
     println!("on_close");
+    //TODO: set offline signal
   }
 
   fn on_connect(&mut self, cli: &RtmClient) {
     println!("on_connect");
+    //TODO: set online signal
   }
 }
 
