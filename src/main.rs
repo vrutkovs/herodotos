@@ -39,6 +39,12 @@ impl slack::EventHandler for PMHandler {
           None => return,
         };
       }
+      slack::Message::MessageChanged(m) => {
+        match self.get_edited_message(m) {
+          Some(m) => self.process_edited_message(m),
+          None => return,
+        };
+      }
       _ => return,
     };
   }
@@ -91,6 +97,44 @@ impl PMHandler {
     })
   }
 
+  fn get_edited_message(
+    &mut self,
+    m: &slack_api::MessageMessageChanged,
+  ) -> Option<(MsgData, MsgData)> {
+    let previous_message = match &m.previous_message {
+      Some(previous_message) => previous_message,
+      None => return None,
+    };
+    let new_message = match &m.message {
+      Some(new_message) => new_message,
+      None => return None,
+    };
+
+    //TODO: merge with get_message?
+    let previous_text = match &previous_message.text {
+      Some(t) => t,
+      None => return None,
+    };
+    let new_text = match &new_message.text {
+      Some(t) => t,
+      None => return None,
+    };
+    let user = match &previous_message.user {
+      Some(u) => u,
+      None => return None,
+    };
+    Some((
+      MsgData {
+        text: previous_text.to_string(),
+        user: user.to_string(),
+      },
+      MsgData {
+        text: new_text.to_string(),
+        user: user.to_string(),
+      },
+    ))
+  }
+
   fn process_message(&mut self, msg: MsgData) -> Option<String> {
     match msg.text.as_str() {
       "done" => Some(format!("{:?}", self.daily_statuses)),
@@ -116,6 +160,22 @@ impl PMHandler {
       Some(usr_status) => {
         let index = usr_status.iter().position(|i| *i == msg.text).unwrap();
         usr_status.remove(index);
+      }
+      None => return,
+    }
+  }
+
+  fn process_edited_message(&mut self, msgs: (MsgData, MsgData)) {
+    let previous_message = msgs.0;
+    let new_message = msgs.1;
+
+    match self.daily_statuses.get_mut(&previous_message.user) {
+      Some(usr_status) => {
+        let index = usr_status
+          .iter()
+          .position(|i| *i == previous_message.text)
+          .unwrap();
+        let _ = std::mem::replace(&mut usr_status[index], new_message.text.to_string());
       }
       None => return,
     }
