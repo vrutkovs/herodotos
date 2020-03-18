@@ -20,10 +20,6 @@ impl slack::EventHandler for PMHandler {
     };
     println!("{}: '{}'", msg_data.user, msg_data.text);
 
-    // if text == "done" then post the collected messages to the channel:
-    //
-    //
-
     match self.process_message(msg_data) {
       Some(message) => {
         let channel_id = "DND47PSF9";
