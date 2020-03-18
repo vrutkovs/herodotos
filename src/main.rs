@@ -76,15 +76,14 @@ impl PMHandler {
         match self.daily_statuses.get_mut(&msg.user) {
           Some(usr_status) => {
             usr_status.push(msg.text.to_string());
-            None
           }
           None => {
             self
               .daily_statuses
               .insert(msg.user.to_string(), vec![msg.text.to_string()]);
-            None
           }
         }
+        None
       }
     }
   }
