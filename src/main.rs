@@ -1,4 +1,5 @@
 use slack;
+use slack_api;
 use std::collections::HashMap;
 
 struct MsgData {
@@ -14,16 +15,32 @@ struct PMHandler {
 impl slack::EventHandler for PMHandler {
   fn on_event(&mut self, cli: &slack::RtmClient, event: slack::Event) {
     println!("on_event(event: {:?})", event);
-    let msg_data = match self.get_message(event) {
-      Some(m) => m,
-      None => return,
-    };
-    println!("{}: '{}'", msg_data.user, msg_data.text);
 
-    match self.process_message(msg_data) {
-      Some(message) => self.post_status(cli, message),
-      None => return,
-    }
+    let slack_message = match event {
+      slack::Event::Message(m) => Box::leak(m),
+      _ => return,
+    };
+    let m = match &slack_message {
+      slack::Message::Standard(m) => {
+        let msg_data = match self.get_message(m) {
+          Some(m) => m,
+          None => return,
+        };
+        println!("{}: '{}'", msg_data.user, msg_data.text);
+
+        match self.process_message(msg_data) {
+          Some(message) => self.post_status(cli, message),
+          None => return,
+        }
+      }
+      slack::Message::MessageDeleted(m) => {
+        match self.get_deleted_message(m) {
+          Some(m) => self.process_deleted_message(m),
+          None => return,
+        };
+      }
+      _ => return,
+    };
   }
 
   fn on_close(&mut self, cli: &slack::RtmClient) {
@@ -38,20 +55,33 @@ impl slack::EventHandler for PMHandler {
 }
 
 impl PMHandler {
-  fn get_message(&mut self, event: slack::Event) -> Option<MsgData> {
-    let slack_message = match event {
-      slack::Event::Message(m) => Box::leak(m),
-      _ => return None,
-    };
-    let m = match &slack_message {
-      slack::Message::Standard(m) => m,
-      _ => return None,
-    };
+  fn get_message(&mut self, m: &slack_api::MessageStandard) -> Option<MsgData> {
     let text = match &m.text {
       Some(t) => t,
       None => return None,
     };
     let user = match &m.user {
+      Some(u) => u,
+      None => return None,
+    };
+    Some(MsgData {
+      text: text.to_string(),
+      user: user.to_string(),
+    })
+  }
+
+  fn get_deleted_message(&mut self, m: &slack_api::MessageMessageDeleted) -> Option<MsgData> {
+    let previous_message = match &m.previous_message {
+      Some(previous_message) => previous_message,
+      None => return None,
+    };
+
+    //TODO: merge with get_message?
+    let text = match &previous_message.text {
+      Some(t) => t,
+      None => return None,
+    };
+    let user = match &previous_message.user {
       Some(u) => u,
       None => return None,
     };
@@ -78,6 +108,16 @@ impl PMHandler {
         }
         None
       }
+    }
+  }
+
+  fn process_deleted_message(&mut self, msg: MsgData) {
+    match self.daily_statuses.get_mut(&msg.user) {
+      Some(usr_status) => {
+        let index = usr_status.iter().position(|i| *i == msg.text).unwrap();
+        usr_status.remove(index);
+      }
+      None => return,
     }
   }
 

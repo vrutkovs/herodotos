@@ -410,6 +410,7 @@ name = "herodotos"
 version = "0.1.0"
 dependencies = [
  "slack",
+ "slack_api",
 ]
 
 [[package]]

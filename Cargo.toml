@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 slack = "0.22.0"
+slack_api = "0.21.0"
