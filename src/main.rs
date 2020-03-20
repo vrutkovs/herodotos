@@ -8,6 +8,7 @@ struct MsgData {
 }
 
 struct PMHandler {
+  channel_id: String,
   daily_statuses: HashMap<String, Vec<String>>,
 }
 
@@ -196,19 +197,24 @@ impl PMHandler {
   }
 
   fn post_status(&mut self, cli: &slack::RtmClient, message: String) {
-    let channel_id = "DND47PSF9";
-    let _ = cli.sender().send_message(&channel_id, message.as_str());
+    let _ = cli
+      .sender()
+      .send_message(&self.channel_id, message.as_str());
   }
 }
 
 fn main() {
   let args: Vec<String> = std::env::args().collect();
-  let api_key = match args.len() {
-    0 | 1 => panic!("No api-key in args! Usage: cargo run -- <api-key>"),
-    x => args[x - 1].clone(),
-  };
+  if args.len() < 2 {
+    panic!("Usage: cargo run -- <api-key> <channel ID>")
+  }
+  let api_key = &args[1];
+  let channel_id = &args[2];
   let daily_statuses = HashMap::new();
-  let mut handler = PMHandler { daily_statuses };
+  let mut handler = PMHandler {
+    daily_statuses: daily_statuses,
+    channel_id: channel_id.to_string(),
+  };
   let r = slack::RtmClient::login_and_run(&api_key, &mut handler);
   match r {
     Ok(_) => {}
