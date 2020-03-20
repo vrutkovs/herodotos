@@ -1,3 +1,4 @@
+use log::trace;
 use slack;
 use slack_api;
 use std::collections::HashMap;
@@ -15,7 +16,7 @@ struct PMHandler {
 #[allow(unused_variables)]
 impl slack::EventHandler for PMHandler {
   fn on_event(&mut self, cli: &slack::RtmClient, event: slack::Event) {
-    println!("on_event(event: {:?})", event);
+    trace!("on_event(event: {:?})", event);
 
     let slack_message = match event {
       slack::Event::Message(m) => Box::leak(m),
@@ -43,7 +44,7 @@ impl slack::EventHandler for PMHandler {
         if channel.is_some() {
           return;
         }
-        println!("private {}: '{}'", msg_data.user, msg_data.text);
+        trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
 
         match self.process_message(cli, msg_data) {
           Some(message) => self.post_status(cli, message),
@@ -68,12 +69,12 @@ impl slack::EventHandler for PMHandler {
   }
 
   fn on_close(&mut self, cli: &slack::RtmClient) {
-    println!("on_close");
+    trace!("on_close");
     //TODO: set offline signal
   }
 
   fn on_connect(&mut self, cli: &slack::RtmClient) {
-    println!("on_connect");
+    trace!("on_connect");
     //TODO: set online signal
   }
 }
