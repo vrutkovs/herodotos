@@ -55,8 +55,8 @@ impl PMHandler {
         }
         trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
 
-        let msg = self.process_message(cli, msg_data)?;
-        Some(self.post_status(cli, msg))
+        let msg = self.process_message(cli, msg_data, channel_id)?;
+        Some(self.send_status(cli, msg))
       }
       slack::Message::MessageDeleted(m) => {
         let msg = &get_deleted_message(m)?;
@@ -70,13 +70,20 @@ impl PMHandler {
     }
   }
 
-  fn process_message(&mut self, cli: &slack::RtmClient, msg: &MsgData) -> Option<String> {
+  fn process_message(
+    &mut self,
+    cli: &slack::RtmClient,
+    msg: &MsgData,
+    channel_id: String,
+  ) -> Option<String> {
     // Process message
     let user_id = msg.user.as_str().clone();
     let username = get_username(cli, &user_id)?;
 
     // TODO: rework this with and_then
+    // it appears and_then won't work cause it would borrow self?
     match msg.text.as_str() {
+      // Post the status to the main channel
       "done" => match self.daily_statuses.get_mut(user_id) {
         Some(status) => {
           let output = template_output(username, status.clone());
@@ -85,6 +92,15 @@ impl PMHandler {
             .entry(msg.user.clone())
             .and_modify(|e| *e = Vec::<String>::new());
           Some(output)
+        }
+        None => None,
+      },
+      // Post the status to the channel with the last message and don't cleanup existing status
+      "preview" => match self.daily_statuses.get_mut(user_id) {
+        Some(status) => {
+          let output = template_output(username, status.clone());
+          post_status(cli, &channel_id, output);
+          None
         }
         None => None,
       },
@@ -136,11 +152,15 @@ impl PMHandler {
       .unwrap();
   }
 
-  fn post_status(&mut self, cli: &slack::RtmClient, message: String) {
-    let _ = cli
-      .sender()
-      .send_message(&self.channel_id, message.as_str());
+  fn send_status(&mut self, cli: &slack::RtmClient, message: String) {
+    post_status(cli, &self.channel_id, message)
   }
+}
+
+fn post_status(cli: &slack::RtmClient, channel_id: &String, message: String) {
+  let _ = cli
+    .sender()
+    .send_message(channel_id.as_str(), message.as_str());
 }
 
 fn get_username(cli: &slack::RtmClient, user_id: &str) -> Option<String> {
