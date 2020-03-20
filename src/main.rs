@@ -27,7 +27,23 @@ impl slack::EventHandler for PMHandler {
           Some(m) => m,
           None => return,
         };
-        println!("{}: '{}'", msg_data.user, msg_data.text);
+
+        let channel_id: String = match &m.channel {
+          Some(c) => String::from(c),
+          None => return,
+        };
+        // Ensure its a private message to the bot
+        // we have to ensure that its None
+        let channel = cli.start_response().channels.as_ref().and_then(|channels| {
+          channels.iter().find(|chan| match chan.id {
+            None => false,
+            Some(ref id) => *id == channel_id,
+          })
+        });
+        if channel.is_some() {
+          return;
+        }
+        println!("private {}: '{}'", msg_data.user, msg_data.text);
 
         match self.process_message(msg_data) {
           Some(message) => self.post_status(cli, message),
@@ -138,6 +154,7 @@ impl PMHandler {
   }
 
   fn process_message(&mut self, msg: MsgData) -> Option<String> {
+    // Process message
     match msg.text.as_str() {
       "done" => {
         match self.daily_statuses.get_mut(&msg.user) {
