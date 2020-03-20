@@ -17,9 +17,7 @@ struct PMHandler {
 impl slack::EventHandler for PMHandler {
   fn on_event(&mut self, cli: &slack::RtmClient, event: slack::Event) {
     trace!("on_event(event: {:?})", event);
-    let _ = self
-      .process_event(cli, event)
-      .expect("Error processing the message");
+    let _ = self.process_event(cli, event);
     // TODO: react to original message?
   }
 
