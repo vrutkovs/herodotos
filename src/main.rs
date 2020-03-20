@@ -173,7 +173,10 @@ impl PMHandler {
   fn process_deleted_message(&mut self, msg: MsgData) {
     match self.daily_statuses.get_mut(&msg.user) {
       Some(usr_status) => {
-        let index = usr_status.iter().position(|i| *i == msg.text).unwrap();
+        let index = match usr_status.iter().position(|i| *i == msg.text) {
+          Some(i) => i,
+          None => return,
+        };
         usr_status.remove(index);
       }
       None => return,
