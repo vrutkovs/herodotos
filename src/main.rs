@@ -76,6 +76,8 @@ impl PMHandler {
     // Process message
     let user_id = msg.user.as_str().clone();
     let username = get_username(cli, &user_id)?;
+
+    // TODO: rework this with and_then
     match msg.text.as_str() {
       "done" => match self.daily_statuses.get_mut(user_id) {
         Some(status) => {
@@ -106,32 +108,34 @@ impl PMHandler {
   }
 
   fn process_deleted_message(&mut self, msg: &MsgData) {
-    match self.daily_statuses.get_mut(&msg.user) {
-      Some(usr_status) => {
-        let index = match usr_status.iter().position(|i| *i == msg.text) {
-          Some(i) => i,
-          None => return,
-        };
-        usr_status.remove(index);
-      }
-      None => return,
-    }
+    self
+      .daily_statuses
+      .get_mut(&msg.user)
+      .and_then(|usr_status| {
+        let index = usr_status.iter().position(|i| *i == msg.text)?;
+        Some(usr_status.remove(index))
+      })
+      .unwrap();
   }
 
   fn process_edited_message(&mut self, msgs: &(MsgData, MsgData)) {
     let previous_message = &msgs.0;
     let new_message = &msgs.1;
 
-    match self.daily_statuses.get_mut(&previous_message.user) {
-      Some(usr_status) => {
+    self
+      .daily_statuses
+      .get_mut(&previous_message.user)
+      .and_then(|usr_status| {
         let index = usr_status
           .iter()
           .position(|i| *i == previous_message.text)
           .unwrap();
-        let _ = std::mem::replace(&mut usr_status[index], new_message.text.to_string());
-      }
-      None => return,
-    }
+        Some(std::mem::replace(
+          &mut usr_status[index],
+          new_message.text.to_string(),
+        ))
+      })
+      .unwrap();
   }
 
   fn post_status(&mut self, cli: &slack::RtmClient, message: String) {
@@ -156,14 +160,8 @@ fn get_username(cli: &slack::RtmClient, user_id: &str) -> Option<String> {
 }
 
 fn get_message(m: &slack_api::MessageStandard) -> Option<MsgData> {
-  let text = match &m.text {
-    Some(t) => t,
-    None => return None,
-  };
-  let user = match &m.user {
-    Some(u) => u,
-    None => return None,
-  };
+  let text = m.text.as_ref()?;
+  let user = m.user.as_ref()?;
   Some(MsgData {
     text: text.to_string(),
     user: user.to_string(),
@@ -171,20 +169,10 @@ fn get_message(m: &slack_api::MessageStandard) -> Option<MsgData> {
 }
 
 fn get_deleted_message(m: &slack_api::MessageMessageDeleted) -> Option<MsgData> {
-  let previous_message = match &m.previous_message {
-    Some(previous_message) => previous_message,
-    None => return None,
-  };
-
-  //TODO: merge with get_message?
-  let text = match &previous_message.text {
-    Some(t) => t,
-    None => return None,
-  };
-  let user = match &previous_message.user {
-    Some(u) => u,
-    None => return None,
-  };
+  let previous_message = m.previous_message.as_ref()?;
+  //TODO: Merge with get_message?
+  let text = previous_message.text.as_ref()?;
+  let user = previous_message.user.as_ref()?;
   Some(MsgData {
     text: text.to_string(),
     user: user.to_string(),
@@ -199,28 +187,12 @@ fn template_output(user: String, status: Vec<String>) -> String {
 }
 
 fn get_edited_message(m: &slack_api::MessageMessageChanged) -> Option<(MsgData, MsgData)> {
-  let previous_message = match &m.previous_message {
-    Some(previous_message) => previous_message,
-    None => return None,
-  };
-  let new_message = match &m.message {
-    Some(new_message) => new_message,
-    None => return None,
-  };
+  let previous_message = m.previous_message.as_ref()?;
+  let new_message = m.message.as_ref()?;
 
-  //TODO: merge with get_message?
-  let previous_text = match &previous_message.text {
-    Some(t) => t,
-    None => return None,
-  };
-  let new_text = match &new_message.text {
-    Some(t) => t,
-    None => return None,
-  };
-  let user = match &previous_message.user {
-    Some(u) => u,
-    None => return None,
-  };
+  let previous_text = previous_message.text.as_ref()?;
+  let user = previous_message.user.as_ref()?;
+  let new_text = new_message.text.as_ref()?;
   Some((
     MsgData {
       text: previous_text.to_string(),
