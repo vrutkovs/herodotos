@@ -45,7 +45,7 @@ impl slack::EventHandler for PMHandler {
         }
         println!("private {}: '{}'", msg_data.user, msg_data.text);
 
-        match self.process_message(msg_data) {
+        match self.process_message(cli, msg_data) {
           Some(message) => self.post_status(cli, message),
           None => return,
         }
@@ -153,23 +153,36 @@ impl PMHandler {
     ))
   }
 
-  fn process_message(&mut self, msg: MsgData) -> Option<String> {
+  fn get_username(&mut self, cli: &slack::RtmClient, user_id: &str) -> Option<String> {
+    cli
+      .start_response()
+      .users
+      .as_ref()
+      .and_then(|users| {
+        users.iter().find(|user| match user.id {
+          None => false,
+          Some(ref id) => *id == user_id,
+        })
+      })
+      .and_then(|ref u| u.real_name.clone())
+  }
+
+  fn process_message(&mut self, cli: &slack::RtmClient, msg: MsgData) -> Option<String> {
     // Process message
+    let user_id = msg.user.as_str().clone();
+    let username = self.get_username(cli, &user_id)?;
     match msg.text.as_str() {
-      "done" => {
-        match self.daily_statuses.get_mut(&msg.user) {
-          Some(status) => {
-            //TODO: get readable user name
-            let output = format!("Status for {}:\n{:?}", msg.user, status);
-            self
-              .daily_statuses
-              .entry(msg.user)
-              .and_modify(|e| *e = Vec::<String>::new());
-            Some(output)
-          }
-          None => None,
+      "done" => match self.daily_statuses.get_mut(user_id) {
+        Some(status) => {
+          let output = template_output(username, status.clone());
+          self
+            .daily_statuses
+            .entry(msg.user)
+            .and_modify(|e| *e = Vec::<String>::new());
+          Some(output)
         }
-      }
+        None => None,
+      },
       _ => {
         // Store messages
         match self.daily_statuses.get_mut(&msg.user) {
@@ -221,6 +234,13 @@ impl PMHandler {
       .sender()
       .send_message(&self.channel_id, message.as_str());
   }
+}
+
+fn template_output(user: String, status: Vec<String>) -> String {
+  //TODO: get readable user name
+  let mut output = format!("Status for {}:\n", user);
+  output.extend(status.iter().map(|ref line| format!("  * {}\n", line)));
+  output
 }
 
 fn main() {
