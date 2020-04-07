@@ -235,9 +235,11 @@ fn main() {
     daily_statuses: daily_statuses,
     channel_id: channel_id.to_string(),
   };
-  let r = slack::RtmClient::login_and_run(&api_key, &mut handler);
-  match r {
-    Ok(_) => {}
-    Err(err) => panic!("Error: {}", err),
+  loop {
+    let r = slack::RtmClient::login_and_run(&api_key, &mut handler);
+    match r {
+      Ok(_) => {}
+      Err(err) => println!("Error: {}", err),
+    }
   }
 }
