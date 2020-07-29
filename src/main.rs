@@ -53,7 +53,7 @@ impl PMHandler {
         }
         trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
 
-        let msg = self.process_message(cli, msg_data, msg_channel_id.clone())?;
+        let msg = self.process_message(cli, msg_data)?;
         Some(self.send_message(cli, self.status_channel_id.clone(), msg))
       }
       slack::Message::MessageDeleted(m) => {
@@ -78,52 +78,26 @@ impl PMHandler {
     channel.is_none()
   }
 
-  fn process_message(
-    &mut self,
-    cli: &slack::RtmClient,
-    msg: &MsgData,
-    channel_id: String,
-  ) -> Option<String> {
+  fn process_message(&mut self, cli: &slack::RtmClient, msg: &MsgData) -> Option<String> {
     // Process message
     let user_id = msg.user.as_str().clone();
     let username = get_username(cli, &user_id)?;
+    let mut user_msgs = self.daily_statuses.get_mut(&msg.user);
 
-    // TODO: rework this with and_then
-    // it appears and_then won't work cause it would borrow self?
     match msg.text.as_str() {
-      // Post the status to the main channel
-      "done" => match self.daily_statuses.get_mut(user_id) {
-        Some(status) => {
-          let output = template_output(username, status.clone());
-          self
-            .daily_statuses
-            .entry(msg.user.clone())
-            .and_modify(|e| *e = Vec::<String>::new());
-          Some(output)
-        }
-        None => None,
-      },
-      // Post the status to the channel with the last message and don't cleanup existing status
-      "preview" => match self.daily_statuses.get_mut(user_id) {
-        Some(status) => {
-          let output = template_output(username, status.clone());
-          self.send_message(cli, channel_id, output);
-          None
-        }
-        None => None,
-      },
+      // Return the message to post
+      "preview" => user_msgs.map_or(None, |v| Some(template_output(username, v.to_vec()))),
+      "done" => {
+        // Same as preview, but also replace existing value with None via `take`
+        user_msgs
+          .take()
+          .map_or(None, |v| Some(template_output(username, v.to_vec())))
+      }
       _ => {
         // Store messages
-        match self.daily_statuses.get_mut(&msg.user) {
-          Some(usr_status) => {
-            usr_status.push(msg.text.to_string());
-          }
-          None => {
-            self
-              .daily_statuses
-              .insert(msg.user.to_string(), vec![msg.text.to_string()]);
-          }
-        }
+        let empty_vec = &mut Vec::<String>::new();
+        let msg_vec = user_msgs.get_or_insert(empty_vec);
+        msg_vec.push(msg.text.to_string());
         None
       }
     }
