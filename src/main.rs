@@ -32,6 +32,13 @@ impl slack::EventHandler for PMHandler {
 }
 
 impl PMHandler {
+  pub fn new(channel_id: &str) -> PMHandler {
+    PMHandler {
+      channel_id: channel_id.to_string(),
+      daily_statuses: HashMap::new(),
+    }
+  }
+
   fn process_event(&mut self, cli: &slack::RtmClient, event: slack::Event) -> Option<()> {
     let slack_message = match event {
       slack::Event::Message(m) => Box::leak(m),
@@ -229,11 +236,7 @@ fn main() {
   }
   let api_key = &args[1];
   let channel_id = &args[2];
-  let daily_statuses = HashMap::new();
-  let mut handler = PMHandler {
-    daily_statuses: daily_statuses,
-    channel_id: channel_id.to_string(),
-  };
+  let mut handler = PMHandler::new(channel_id);
   loop {
     let r = slack::RtmClient::login_and_run(&api_key, &mut handler);
     match r {
