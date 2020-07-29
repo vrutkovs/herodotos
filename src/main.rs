@@ -48,7 +48,7 @@ impl PMHandler {
       slack::Message::Standard(m) => {
         let msg_data = &get_message(m)?;
         let msg_channel_id = String::from(m.channel.as_ref()?);
-        if !self.is_private_message(cli, msg_channel_id.clone()) {
+        if !is_private_message(cli, msg_channel_id.clone()) {
           return None;
         }
         trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
@@ -66,16 +66,6 @@ impl PMHandler {
       }
       _ => None,
     }
-  }
-
-  fn is_private_message(&mut self, cli: &slack::RtmClient, channel_id: String) -> bool {
-    let channel = cli.start_response().channels.as_ref().and_then(|channels| {
-      channels.iter().find(|chan| match chan.id {
-        None => false,
-        Some(ref id) => *id == channel_id,
-      })
-    });
-    channel.is_none()
   }
 
   fn process_message(&mut self, cli: &slack::RtmClient, msg: &MsgData) -> Option<String> {
@@ -139,6 +129,16 @@ fn send_message(cli: &slack::RtmClient, channel_id: String, message: String) {
   let _ = cli
     .sender()
     .send_message(channel_id.as_str(), message.as_str());
+}
+
+fn is_private_message(cli: &slack::RtmClient, channel_id: String) -> bool {
+  let channel = cli.start_response().channels.as_ref().and_then(|channels| {
+    channels.iter().find(|chan| match chan.id {
+      None => false,
+      Some(ref id) => *id == channel_id,
+    })
+  });
+  channel.is_none()
 }
 
 fn get_username(cli: &slack::RtmClient, user_id: &str) -> Option<String> {
