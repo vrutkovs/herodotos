@@ -54,7 +54,7 @@ impl PMHandler {
         trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
 
         let msg = self.process_message(cli, msg_data)?;
-        Some(self.send_message(cli, self.status_channel_id.clone(), msg))
+        Some(send_message(cli, self.status_channel_id.clone(), msg))
       }
       slack::Message::MessageDeleted(m) => {
         let msg = &get_deleted_message(m)?;
@@ -133,12 +133,12 @@ impl PMHandler {
       })
       .unwrap();
   }
+}
 
-  fn send_message(&mut self, cli: &slack::RtmClient, channel_id: String, message: String) {
-    let _ = cli
-      .sender()
-      .send_message(channel_id.as_str(), message.as_str());
-  }
+fn send_message(cli: &slack::RtmClient, channel_id: String, message: String) {
+  let _ = cli
+    .sender()
+    .send_message(channel_id.as_str(), message.as_str());
 }
 
 fn get_username(cli: &slack::RtmClient, user_id: &str) -> Option<String> {
