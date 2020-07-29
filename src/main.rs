@@ -9,7 +9,7 @@ struct MsgData {
 }
 
 struct PMHandler {
-  channel_id: String,
+  status_channel_id: String,
   daily_statuses: HashMap<String, Vec<String>>,
 }
 
@@ -34,7 +34,7 @@ impl slack::EventHandler for PMHandler {
 impl PMHandler {
   pub fn new(channel_id: &str) -> PMHandler {
     PMHandler {
-      channel_id: channel_id.to_string(),
+      status_channel_id: channel_id.to_string(),
       daily_statuses: HashMap::new(),
     }
   }
@@ -47,22 +47,14 @@ impl PMHandler {
     match &slack_message {
       slack::Message::Standard(m) => {
         let msg_data = &get_message(m)?;
-        let channel_id = String::from(m.channel.as_ref()?);
-        // Ensure its a private message to the bot
-        // we have to ensure that its None
-        let channel = cli.start_response().channels.as_ref().and_then(|channels| {
-          channels.iter().find(|chan| match chan.id {
-            None => false,
-            Some(ref id) => *id == channel_id,
-          })
-        });
-        if channel.is_some() {
+        let msg_channel_id = String::from(m.channel.as_ref()?);
+        if !self.is_private_message(cli, msg_channel_id.clone()) {
           return None;
         }
         trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
 
-        let msg = self.process_message(cli, msg_data, channel_id)?;
-        Some(self.send_status(cli, msg))
+        let msg = self.process_message(cli, msg_data, msg_channel_id.clone())?;
+        Some(self.send_message(cli, self.status_channel_id.clone(), msg))
       }
       slack::Message::MessageDeleted(m) => {
         let msg = &get_deleted_message(m)?;
@@ -74,6 +66,16 @@ impl PMHandler {
       }
       _ => None,
     }
+  }
+
+  fn is_private_message(&mut self, cli: &slack::RtmClient, channel_id: String) -> bool {
+    let channel = cli.start_response().channels.as_ref().and_then(|channels| {
+      channels.iter().find(|chan| match chan.id {
+        None => false,
+        Some(ref id) => *id == channel_id,
+      })
+    });
+    channel.is_none()
   }
 
   fn process_message(
@@ -105,7 +107,7 @@ impl PMHandler {
       "preview" => match self.daily_statuses.get_mut(user_id) {
         Some(status) => {
           let output = template_output(username, status.clone());
-          post_status(cli, &channel_id, output);
+          self.send_message(cli, channel_id, output);
           None
         }
         None => None,
@@ -158,15 +160,11 @@ impl PMHandler {
       .unwrap();
   }
 
-  fn send_status(&mut self, cli: &slack::RtmClient, message: String) {
-    post_status(cli, &self.channel_id, message)
+  fn send_message(&mut self, cli: &slack::RtmClient, channel_id: String, message: String) {
+    let _ = cli
+      .sender()
+      .send_message(channel_id.as_str(), message.as_str());
   }
-}
-
-fn post_status(cli: &slack::RtmClient, channel_id: &String, message: String) {
-  let _ = cli
-    .sender()
-    .send_message(channel_id.as_str(), message.as_str());
 }
 
 fn get_username(cli: &slack::RtmClient, user_id: &str) -> Option<String> {
