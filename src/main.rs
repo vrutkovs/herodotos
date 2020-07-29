@@ -13,7 +13,6 @@ struct PMHandler {
   daily_statuses: HashMap<String, Vec<String>>,
 }
 
-#[allow(unused_variables)]
 impl slack::EventHandler for PMHandler {
   fn on_event(&mut self, cli: &slack::RtmClient, event: slack::Event) {
     trace!("on_event(event: {:?})", event);
@@ -21,12 +20,12 @@ impl slack::EventHandler for PMHandler {
     // TODO: react to original message?
   }
 
-  fn on_close(&mut self, cli: &slack::RtmClient) {
+  fn on_close(&mut self, _: &slack::RtmClient) {
     trace!("on_close");
     //TODO: set offline signal
   }
 
-  fn on_connect(&mut self, cli: &slack::RtmClient) {
+  fn on_connect(&mut self, _: &slack::RtmClient) {
     trace!("on_connect");
     //TODO: set online signal
   }
