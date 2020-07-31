@@ -1,4 +1,5 @@
-use log::trace;
+use env_logger;
+use log::{info, trace};
 use slack;
 use slack_api;
 use std::collections::HashMap;
@@ -40,27 +41,38 @@ impl PMHandler {
   }
 
   fn process_event(&mut self, cli: &slack::RtmClient, event: slack::Event) -> Option<()> {
+    trace!("processing event {:?}", event);
     let slack_message = match event {
       slack::Event::Message(m) => Box::leak(m),
       _ => return None,
     };
     match &slack_message {
       slack::Message::Standard(m) => {
+        trace!("standard message found");
         let msg_data = &get_message(m)?;
         let msg_channel_id = String::from(m.channel.as_ref()?);
         if !is_private_message(cli, msg_channel_id.clone()) {
+          trace!("message for channel {}, not PM", msg_channel_id.clone());
           return None;
         }
-        trace!("processing message {}: '{}'", msg_data.user, msg_data.text);
+        info!(
+          "Processing message from {}: '{}'",
+          msg_data.user, msg_data.text
+        );
 
-        let msg = self.process_message(cli, msg_data)?;
+        let msg = self.process_message(cli, msg_data, &msg_channel_id)?;
+
+        trace!("got msg: '{}'", msg);
+
         Some(send_message(cli, self.status_channel_id.clone(), msg))
       }
       slack::Message::MessageDeleted(m) => {
+        trace!("processing deleted message");
         let msg = &get_deleted_message(m)?;
         Some(self.process_deleted_message(msg))
       }
       slack::Message::MessageChanged(m) => {
+        trace!("processing updated message");
         let msg = &get_edited_message(m)?;
         Some(self.process_edited_message(msg))
       }
@@ -68,29 +80,45 @@ impl PMHandler {
     }
   }
 
-  fn process_message(&mut self, cli: &slack::RtmClient, msg: &MsgData) -> Option<String> {
+  fn process_message(
+    &mut self,
+    cli: &slack::RtmClient,
+    msg: &MsgData,
+    msg_channel_id: &str,
+  ) -> Option<String> {
     // Process message
     let user_id = msg.user.as_str().clone();
     let username = get_username(cli, &user_id)?;
-    let mut user_msgs = self.daily_statuses.get_mut(&msg.user);
+    let user_msgs = self
+      .daily_statuses
+      .entry(msg.user.clone())
+      .or_insert(Vec::<String>::new());
 
-    match msg.text.as_str() {
+    trace!("got user_msgs: '{:?}'", user_msgs);
+
+    let result = match msg.text.as_str() {
       // Return the message to post
-      "preview" => user_msgs.map_or(None, |v| Some(template_output(username, v.to_vec()))),
       "done" => {
-        // Same as preview, but also replace existing value with None via `take`
-        user_msgs
-          .take()
-          .map_or(None, |v| Some(template_output(username, v.to_vec())))
+        // Return status message, reset user_msgs
+        let output = template_output(username, user_msgs.to_vec());
+        user_msgs.clear();
+        Some(output)
+      }
+      "preview" => {
+        // Preview posts message back to user, not public channel
+        let output = template_output(username, user_msgs.to_vec());
+        send_message(cli, msg_channel_id.to_string(), output);
+        None
       }
       _ => {
         // Store messages
-        let empty_vec = &mut Vec::<String>::new();
-        let msg_vec = user_msgs.get_or_insert(empty_vec);
-        msg_vec.push(msg.text.to_string());
+        user_msgs.push(msg.text.to_string());
+        trace!("new user_msgs: '{:?}'", user_msgs);
         None
       }
-    }
+    };
+    trace!("new daily_statuses: '{:?}'", self.daily_statuses);
+    result
   }
 
   fn process_deleted_message(&mut self, msg: &MsgData) {
@@ -126,6 +154,7 @@ impl PMHandler {
 }
 
 fn send_message(cli: &slack::RtmClient, channel_id: String, message: String) {
+  info!("Sending message to channel {}: '{:?}'", channel_id, message);
   let _ = cli
     .sender()
     .send_message(channel_id.as_str(), message.as_str());
@@ -206,9 +235,13 @@ fn main() {
   if args.len() < 2 {
     panic!("Usage: cargo run -- <api-key> <channel ID>")
   }
+
+  env_logger::init();
+
   let api_key = &args[1];
   let channel_id = &args[2];
   let mut handler = PMHandler::new(channel_id);
+  trace!("Starting slack bot");
   loop {
     let r = slack::RtmClient::login_and_run(&api_key, &mut handler);
     match r {
